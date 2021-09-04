@@ -132,8 +132,14 @@ restore () {
     echo "History file $file updated"
 
     case $parent_shell in
-    *zsh) 
-        echo "Open a new shell or refresh history in the current shell by running 'fc -RI'"
+    *zsh)
+        if [[ -z "$TERM_SESSION_ID" ]]; then
+            echo "Open a new shell or refresh history in the current shell by running 'fc -RI'"
+        else
+            # Special case for running in an Apple Terminal instance, which by default captures
+            # terminal session history separately and merges from the shared history on launch
+            echo "Open a new Terminal instance to refresh history"
+        fi
     ;;
     *)
         echo "Open a new shell or refresh history in the current shell by running 'history -n'"
