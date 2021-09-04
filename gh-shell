@@ -115,16 +115,15 @@ restore () {
     parent_shell_pid=$(ps -o ppid= -p $PPID | tr -d '[:space:]')
     parent_shell=$(ps -p $parent_shell_pid -o comm=)
     case $parent_shell in
-    zsh) 
+    *zsh) 
         echo "✅ Detected zsh"
         file=${HISTFILE:-$HOME/.zsh_history}
     ;;
-    bash)
+    *bash)
         echo "✅ Detected bash"
         file=${HISTFILE:-$HOME/.bash_history}
     ;;
     *)
-        pstree
         echo "⚠️ Could not detect shell ($parent_shell). Assuming bash."
         file=${HISTFILE:-$HOME/.bash_history}
     esac
@@ -133,7 +132,7 @@ restore () {
     echo "History file $file updated"
 
     case $parent_shell in
-    zsh) 
+    *zsh) 
         echo "Open a new shell or refresh history in the current shell by running 'fc -RI'"
     ;;
     *)
