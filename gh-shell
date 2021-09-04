@@ -1,0 +1,122 @@
+#!/bin/bash
+set -euo pipefail
+
+usage () {
+    echo "AVAILABLE COMMANDS"
+    echo "  list:    View your saved shell commands"
+    echo "  add:     Add a shell command to your list"
+    echo "  remove:  Remove a shell command from your list"
+    echo "  restore: Append all commands from your list so your current shell's history file"
+    echo ""
+    echo "EXAMPLES"
+    echo "$ gh shell list"
+    echo "$ gh shell add <command>"
+    echo "$ gh shell remove <command>"
+    echo "$ gh shell restore"
+}
+
+get_gist_id () {
+    gh api gists -q 'map(select(.files | has("gh-shell")))[0].id'
+}
+
+read_gist () {
+    gh gist view -f gh-shell $1
+}
+
+list () {
+    id=$(get_gist_id)
+    if [[ -z "$id" ]]; then
+        echo "You don't have any commands saved. Try adding one with 'gh shell add <command>'."
+        exit 1
+    fi
+
+    output=$(read_gist $id)
+    if [[ -z "$output" ]]; then
+        echo "You don't have any commands saved. Try adding one with 'gh shell add <command>'."
+        exit 1
+    fi
+
+    echo "$output"
+}
+
+create_gist () {
+    command=$*
+    echo "$command" | gh gist create -d "Saved commands for gh-shell" -f gh-shell - &>/dev/null
+}
+
+delete_gist () {
+    gh gist delete $1
+}
+
+update_gist () {
+    id=$1
+    shift
+    content=$*
+
+    jq --arg c "$content" -n '{"files":{"gh-shell":{"content":$c}}}' \
+        | gh api gists/$id -X PATCH -H 'Accept: application/vnd.github.v3+json' --input - \
+        &>/dev/null
+}
+
+add () {
+    shift
+    command="$*"
+    if [[ -z "$command" ]]; then
+        echo "No command specified to add."
+        echo ""
+        usage
+        exit 1
+    fi
+
+    id=$(get_gist_id)
+    if [[ -z "$id" ]]; then
+        create_gist $command
+    else
+        content=$(read_gist $id)
+        content=$(echo -e "$content\n$command")
+        update_gist $id "$content"
+    fi
+}
+
+remove () {
+    shift
+    command="$*"
+    if [[ -z "$command" ]]; then
+        echo "No command specified to remove."
+        echo ""
+        usage
+        exit 1
+    fi
+
+    id=$(get_gist_id)
+    if [[ -z "$id" ]]; then
+        # List doesn't exist. Nothing to remove.
+        exit 0
+    else
+        content=$(read_gist $id)
+        set +e
+        content=$(echo "$content" | grep -Fxv "$command")
+        set -e
+        if [[ -z "$content" ]]; then
+            # When the last command is removed, delete the whole gist
+            delete_gist $id
+        else
+            update_gist $id "$content"
+        fi
+    fi
+}
+
+restore () {
+    file=${HISTFILE:-$HOME/.bash_history}
+    echo "$(list)" >> $file
+}
+
+declare -A COMMANDS=(
+    [usage]=usage
+    [list]=list
+    [add]=add
+    [remove]=remove
+    [restore]=restore
+)
+
+"${COMMANDS[${1:-usage}]:-${COMMANDS[usage]}}" "$@"
