@@ -107,8 +107,38 @@ remove () {
 }
 
 restore () {
-    file=${HISTFILE:-$HOME/.bash_history}
+    # When invoked through `gh` directly in a shell, the process chain should look something like
+    # (shell) -> gh shell restore -> bash -> gh-shell
+    # $PPID will point to the process id of `gh shell restore`. We need to find the parent
+    # of this process to determine which shell the user is invoking this from so that we
+    # can update the correct history file for that shell.
+    parent_shell_pid=$(ps -o ppid= -p $PPID | tr -d '[:space:]')
+    parent_shell=$(ps -p $parent_shell_pid -o comm=)
+    case $parent_shell in
+    zsh) 
+        echo "✅ Detected zsh"
+        file=${HISTFILE:-$HOME/.zsh_history}
+    ;;
+    bash)
+        echo "✅ Detected bash"
+        file=${HISTFILE:-$HOME/.bash_history}
+    ;;
+    *)
+        pstree
+        echo "⚠️ Could not detect shell ($parent_shell). Assuming bash."
+        file=${HISTFILE:-$HOME/.bash_history}
+    esac
+    
     echo "$(list)" >> $file
+    echo "History file $file updated"
+
+    case $parent_shell in
+    zsh) 
+        echo "Open a new shell or refresh history in the current shell by running 'fc -RI'"
+    ;;
+    *)
+        echo "Open a new shell or refresh history in the current shell by running 'history -n'"
+    esac
 }
 
 declare -A COMMANDS=(
